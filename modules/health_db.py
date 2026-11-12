@@ -242,3 +242,5 @@ if __name__ == "__main__":
     sys.path.insert(0, BASE_DIR)
     from modules.health_db import main as _main
     _main()
+
+
