@@ -84,7 +84,53 @@ class HealthRecord:
             "bmi": self.bmi,
             "status": self.status,
         }
-
+    # ------------------------------------------------------------
+    # [AI 사용 주석]
+    # - AI 종류   : Claude
+    # - 사용 목적 : HealthRecord의 from_dict() 메소드 설명 (@classmethod를 쓰는 이유)
+    # - 사용한 사람: 추민경
+    # - 사용 날짜 : 2026-11-13
+    # ------------------------------------------------------------
+    # [@는 무엇일까?]
+    #   @ 로 시작하는 줄을 "데코레이터(decorator)"라고 한다.
+    #   바로 아래에 있는 함수에 특별한 기능을 덧붙여 주는 표시이다.
+    #   @classmethod 는 "이 메소드는 객체(self)가 아니라 클래스(cls)에 속한다"는 뜻이다.
+    #
+    # [왜 @classmethod를 쓸까?]
+    #   일반 메소드는 첫 번째 자리에 self(만들어진 객체 자신)를 받는다.
+    #   그런데 from_dict는 "객체를 새로 만들기 위한" 메소드라서,
+    #   호출하는 시점에는 아직 객체가 존재하지 않는다.
+    #   그래서 객체 없이 클래스 이름으로 바로 호출할 수 있어야 하고,
+    #   이때 필요한 것이 @classmethod 이다.
+    #
+    #   - 일반 메소드     : rec.to_dict()               <- 객체를 먼저 만들어야 호출 가능
+    #   - 클래스 메소드   : HealthRecord.from_dict(d)   <- 객체 없이 클래스로 바로 호출
+    #
+    #   만약 @classmethod 없이 def from_dict(self, d) 로 쓰면
+    #   HealthRecord.from_dict(d) 호출 시 self 자리에 d가 들어가 버려서 오류가 난다.
+    #
+    # [cls는 무엇일까?]
+    #   @classmethod가 붙으면 첫 번째 매개변수 자리에 self 대신 "클래스 자신"이 들어온다.
+    #   관례적으로 이 매개변수 이름을 cls 라고 쓴다.
+    #   그래서 cls(...) 는 HealthRecord(...) 와 같은 뜻이며, 새 객체를 만들어 돌려준다.
+    #
+    # [변환하는 방법]
+    #   1) d["id"], d["name"] 처럼 딕셔너리에서 필요한 값을 이름표로 꺼낸다.
+    #   2) 꺼낸 값을 cls(...) 에 넣어 새 HealthRecord 객체를 만든다.
+    #   3) bmi와 status는 꺼내지 않는다.
+    #      __init__ 안에서 height, weight로 다시 계산하기 때문이다.
+    #   (CSV/TXT에서 읽은 값은 문자열이지만, __init__의 int(), float()가 숫자로 바꿔준다.)
+    #
+    # [변환 예시]
+    #   딕셔너리 : {"id": "P2026-0001", "name": "홍길동", "birth_year": 1995, ...}
+    #   결과     : HealthRecord(id="P2026-0001", name="홍길동", ...) 객체
+    #
+    # [사용하는 곳]
+    #   - load_json(): JSON에서 읽은 딕셔너리를 객체로 복원
+    #   - load_csv() : CSV 한 줄(딕셔너리)을 객체로 복원
+    #   - load_txt() : TXT 한 줄을 딕셔너리로 만든 뒤 객체로 복원
+    #
+    # return : 딕셔너리 내용으로 새로 만든 HealthRecord 객체
     @classmethod
     def from_dict(cls, d):
         """딕셔너리로부터 레코드 생성 (bmi/status는 다시 계산)."""
