@@ -27,8 +27,9 @@ P2026-0005 최수진 2003 여 165.0 45.0 16.53 저체중
 
 **12주차: 모듈 2 (health_logic.py) - 예정**
 목표: 건강정보 CRUD와 통계 로직 구현, 콘솔 앱으로 테스트
-
+모듈 2 health_logic.py: HealthService가 HealthManager를 상속하여 입력 검증, 중복 체크, CRUD, 검색, BMI 재계산, 통계를 구현 데이터 변경 시 4가지 파일을 자동 동기화
 
 
 **13주차: 모듈 3 (health_gui.py) - 예정**
 목표: tkinter로 GUI 구현 및 모듈 통합
+모듈 3 health_gui.py: HealthApp(tkinter)이 사용자 입력을 모듈 2에 전달하고 결과를 messagebox로 안내

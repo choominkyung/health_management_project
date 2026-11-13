@@ -1,8 +1,7 @@
 """실행 진입점: 모듈1·2 콘솔 테스트 (모듈3 완성 후 GUI 실행으로 교체)"""
-# [AI 사용 기록] AI: Claude / 목적: 모듈2 콘솔 테스트 작성 / 프롬프트: "지정프로젝트 모듈2 작성" / 사용자: (이름) / 날짜: 2026-11-13
+
 import os
 import shutil
-
 from modules.health_logic import HealthService
 
 

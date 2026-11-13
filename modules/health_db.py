@@ -1,5 +1,5 @@
 """모듈 1: 데이터 구조화(HealthRecord) 및 파일 I/O (JSON, CSV, TXT, Pickle)"""
-# [AI 사용 기록] AI: Claude / 목적: 모듈1 코드 작성 / 프롬프트: "지정프로젝트 모듈1 작성" / 사용자: (이름) / 날짜: 2026-11-13
+
 import csv
 import json
 import os
@@ -87,7 +87,22 @@ class HealthManager:
         except (OSError, TypeError) as e:
             print(f"[JSON 저장 오류] {e}")
             return False
-
+   # [AI 사용 기록]
+    # - AI 종류: Claude 
+    # - 사용 목적: 모듈1 JSON 파일 저장(save_json) / 불러오기(load_json) 메소드 작성
+    # - 사용한 사람: 추민경
+    # - 날짜: 2026-11-20
+    #
+    # [코드 설명]
+    # save_json: 레코드 객체 목록을 JSON 파일로 저장한다.
+    #  - open(path, "w", encoding="utf-8"): 쓰기 모드로 파일을 연다. utf-8이라 한글이 깨지지 않는다.
+    #  - with문: 블록이 끝나면 파일을 자동으로 닫아 준다.
+    #  - [r.to_dict() for r in self.records]: 객체(HealthRecord)는 JSON으로 바로 못 바꾸므로
+    #    각 객체를 딕셔너리로 바꾼 리스트를 만든다.
+    #  - json.dump(..., ensure_ascii=False, indent=2): 리스트를 파일에 쓴다.
+    #    ensure_ascii=False는 한글을 그대로 저장하고, indent=2는 보기 좋게 들여쓴다.
+    #  - try-except: 파일 권한 문제나 디스크 오류(OSError), 변환 불가 값(TypeError)이 생겨도
+    #    프로그램이 죽지 않고 오류를 출력한 뒤 False를 반환한다. 성공하면 True를 반환한다.
     def load_json(self, path):
         try:
             with open(path, "r", encoding="utf-8") as f:

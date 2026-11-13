@@ -1,5 +1,5 @@
 """모듈 2: 핵심 비즈니스 로직 (CRUD, 중복 체크, BMI 재계산, 통계)"""
-# [AI 사용 기록] AI: Claude / 목적: 모듈2 코드 작성 / 프롬프트: "지정프로젝트 모듈2 작성" / 사용자: (이름) / 날짜: 2026-11-13
+
 import csv
 import os
 from datetime import date
@@ -47,7 +47,20 @@ class HealthService(HealthManager):
         if height <= 0 or weight <= 0:
             raise ValueError("키와 몸무게는 0보다 커야 합니다.")
         return name, birth_year, gender, height, weight
-
+   # [AI 사용 기록]
+    # - AI 종류: Claude 
+    # - 사용 목적: 모듈2 입력값 검증 함수(validate) 작성
+    # - 사용한 사람: 추민경
+    # - 날짜: 2026-11-20
+    #
+    # [@staticmethod를 쓴 이유]
+    # @는 '데코레이터'로, 바로 아래 함수의 동작 방식을 바꿔 주는 표시이다.
+    # @staticmethod는 이 함수가 self(객체)나 cls(클래스)를 전혀 쓰지 않고,
+    # 받은 값(name, birth_year 등)만으로 검증한다는 뜻이다.
+    # 그래서 객체를 만들지 않고도 HealthService.validate(...)로 호출할 수 있고,
+    # 객체 안에서는 self.validate(...)로도 호출할 수 있다.
+    # 객체의 데이터(self.records 등)와 무관한 순수 검증 함수임을 코드만 봐도 알 수 있고,
+    # 단독으로 테스트하기도 쉽다.
     # ---------- Create ----------
     def is_duplicate(self, name, birth_year, gender):
         return any(r.name == name and r.birth_year == birth_year and r.gender == gender
