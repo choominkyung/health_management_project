@@ -1,156 +1,211 @@
-"""모듈 2: 핵심 비즈니스 로직 (CRUD, 중복 체크, BMI 재계산, 통계)"""
+# health_logic.py : 모듈 2 - 핵심 로직 (CRUD, 검색, 통계)
+#
+# [AI 사용 기록]
+# AI 종류 : Claude (Anthropic)
+# 사용 목적 : 모듈 2(health_logic.py) 코드 작성
+# 프롬프트 : (실제로 입력한 프롬프트를 여기에 적으세요)
+# 사용자/날짜 : (본인 이름) / 2026-11-16
 
-import csv
-import os
-from datetime import date
-
-from modules.health_db import HealthManager, HealthRecord
+from datetime import datetime
+from modules.health_db import HealthManager, HealthRecord, read_csv_rows
 
 
-class HealthService(HealthManager):
-    """HealthManager에 CRUD/검색/통계 로직을 추가한 클래스."""
+class HealthLogic(HealthManager):
+    """HealthManager(저장/불러오기)에 등록·검색·수정·삭제·통계 기능을 더한 클래스."""
 
-    def __init__(self, data_dir="data"):
+    def __init__(self):
         super().__init__()
-        self.data_dir = data_dir
-        os.makedirs(data_dir, exist_ok=True)
-        self.json_path = os.path.join(data_dir, "health_data.json")
-        self.records = self.load_json(self.json_path) if os.path.exists(self.json_path) else []
+        self.fmt = "json"       # 현재 자동 저장에 쓰는 파일 형식
+        self.load(self.fmt)     # 시작할 때 저장된 파일을 불러옴
 
-    # ---------- 저장 ----------
-    def save_all(self):
-        """4가지 형식 모두 동기화 저장."""
-        d = self.data_dir
-        ok = [self.save_json(os.path.join(d, "health_data.json")),
-              self.save_csv(os.path.join(d, "health_data.csv")),
-              self.save_txt(os.path.join(d, "health_data.txt")),
-              self.save_pickle(os.path.join(d, "health_data.pkl"))]
-        return all(ok)
+    # ---------- 입력값 검사 ----------
+    def check_input(self, name, birth_year, gender, height, weight):
+        """입력값을 검사하고 (이름, 생년, 성별, 키, 몸무게)로 바꿔 돌려준다.
 
-    # ---------- 검증 ----------
-    @staticmethod
-    def validate(name, birth_year, gender, height, weight):
-        """입력 검증. 문제 있으면 ValueError, 통과 시 변환된 값 반환."""
+        잘못된 값이면 ValueError(안내 메시지)를 일으킨다.
+        """
         name = str(name).strip()
-        if not name:
+        if name == "":
             raise ValueError("이름을 입력하세요.")
+        if "," in name:
+            raise ValueError("이름에 쉼표(,)는 쓸 수 없습니다.")
+
         try:
             birth_year = int(birth_year)
+        except ValueError:
+            raise ValueError("생년은 숫자로 입력하세요. 예) 1995")
+        if birth_year < 1900 or birth_year > datetime.now().year:
+            raise ValueError("생년이 올바르지 않습니다.")
+
+        if gender not in ("남", "여"):
+            raise ValueError("성별은 '남' 또는 '여'를 선택하세요.")
+
+        try:
             height = float(height)
             weight = float(weight)
-        except (TypeError, ValueError):
-            raise ValueError("생년, 키, 몸무게는 숫자로 입력하세요.")
-        if not 1900 <= birth_year <= date.today().year:
-            raise ValueError("생년이 올바르지 않습니다.")
-        if gender not in ("남", "여"):
-            raise ValueError("성별은 '남' 또는 '여'로 입력하세요.")
+        except ValueError:
+            raise ValueError("키와 몸무게는 숫자로 입력하세요.")
         if height <= 0 or weight <= 0:
             raise ValueError("키와 몸무게는 0보다 커야 합니다.")
+
         return name, birth_year, gender, height, weight
-   # [AI 사용 기록]
-    # - AI 종류: Claude 
-    # - 사용 목적: 모듈2 입력값 검증 함수(validate) 작성
-    # - 사용한 사람: 추민경
-    # - 날짜: 2026-11-20
-    #
-    # [@staticmethod를 쓴 이유]
-    # @는 '데코레이터'로, 바로 아래 함수의 동작 방식을 바꿔 주는 표시이다.
-    # @staticmethod는 이 함수가 self(객체)나 cls(클래스)를 전혀 쓰지 않고,
-    # 받은 값(name, birth_year 등)만으로 검증한다는 뜻이다.
-    # 그래서 객체를 만들지 않고도 HealthService.validate(...)로 호출할 수 있고,
-    # 객체 안에서는 self.validate(...)로도 호출할 수 있다.
-    # 객체의 데이터(self.records 등)와 무관한 순수 검증 함수임을 코드만 봐도 알 수 있고,
-    # 단독으로 테스트하기도 쉽다.
-    # ---------- Create ----------
-    def is_duplicate(self, name, birth_year, gender):
-        return any(r.name == name and r.birth_year == birth_year and r.gender == gender
-                   for r in self.records)
 
-    def add_person(self, name, birth_year, gender, height, weight, save=True):
-        """신규 등록: 검증 → 중복 체크 → ID 자동 발급 → 추가."""
-        name, birth_year, gender, height, weight = self.validate(name, birth_year, gender, height, weight)
+    # ---------- 중복 체크 ----------
+    def is_duplicate(self, name, birth_year, gender, skip_id=None):
+        """이름+생년+성별이 같은 사람이 이미 있으면 True. (skip_id는 검사에서 뺄 식별번호)"""
+        for r in self.records:
+            if r.id == skip_id:
+                continue
+            if r.name == name and r.birth_year == birth_year and r.gender == gender:
+                return True
+        return False
+
+    # ---------- 등록 (Create) ----------
+    def add_record(self, name, birth_year, gender, height, weight):
+        """새 레코드를 등록한다. (성공 여부, 메시지)를 돌려준다."""
+        try:
+            name, birth_year, gender, height, weight = self.check_input(
+                name, birth_year, gender, height, weight)
+        except ValueError as e:
+            return False, str(e)
+
         if self.is_duplicate(name, birth_year, gender):
-            raise ValueError(f"이미 등록된 사람입니다: {name}({birth_year}, {gender})")
-        rec = HealthRecord(self.generate_id(), name, birth_year, gender, height, weight)
-        self.add_record(rec)
-        if save:
-            self.save_all()
-        return rec
+            return False, "이미 등록된 사람입니다. (이름·생년·성별 동일)"
 
-    def import_csv(self, path):
-        """CSV 일괄 등록. (추가 건수, 건너뛴 건수) 반환. id는 새로 발급."""
-        added = skipped = 0
-        try:
-            with open(path, "r", encoding="utf-8-sig", newline="") as f:
-                for row in csv.DictReader(f):
-                    try:
-                        self.add_person(row["name"], row["birth_year"], row["gender"],
-                                        row["height"], row["weight"], save=False)
-                        added += 1
-                    except (ValueError, KeyError):
-                        skipped += 1
-        except OSError as e:
-            print(f"[CSV 일괄등록 오류] {e}")
-        self.save_all()
-        return added, skipped
+        new_id = self.make_id()
+        self.records.append(HealthRecord(new_id, name, birth_year, gender, height, weight))
+        self.save(self.fmt)
+        return True, f"등록되었습니다. (식별번호: {new_id})"
 
-    # ---------- Retrieve ----------
+    def add_from_csv(self, path):
+        """CSV 파일의 여러 사람을 한꺼번에 등록한다. (성공 여부, 메시지)"""
+        rows = read_csv_rows(path)
+        if len(rows) == 0:
+            return False, "읽을 수 있는 데이터가 없습니다. (파일 형식을 확인하세요)"
+
+        added = 0
+        skipped = 0
+        for row in rows:
+            try:
+                name, birth_year, gender, height, weight = self.check_input(
+                    row.get("name", ""), row.get("birth_year", ""), row.get("gender", ""),
+                    row.get("height", ""), row.get("weight", ""))
+            except ValueError:
+                skipped += 1
+                continue
+            if self.is_duplicate(name, birth_year, gender):
+                skipped += 1
+                continue
+            new_id = self.make_id()   # 식별번호는 항상 새로 발급
+            self.records.append(HealthRecord(new_id, name, birth_year, gender, height, weight))
+            added += 1
+
+        self.save(self.fmt)
+        return True, f"{added}명 등록, {skipped}명 제외(오류 또는 중복)"
+
+    # ---------- 조회 (Retrieve) ----------
     def get_all(self):
-        return list(self.records)
+        return self.records
 
-    def get_by_id(self, rid):
-        return next((r for r in self.records if r.id == rid), None)
+    def get_record(self, record_id):
+        """식별번호로 레코드 한 개를 찾는다. 없으면 None."""
+        for r in self.records:
+            if r.id == record_id:
+                return r
+        return None
 
-    def search(self, name=None, rid=None, status=None):
-        """이름(부분일치)·식별번호·비만도 조건으로 검색 (AND 조건)."""
-        result = self.records
-        if name:
-            result = [r for r in result if name in r.name]
-        if rid:
-            result = [r for r in result if r.id == rid]
-        if status:
-            result = [r for r in result if r.status == status]
-        return list(result)
+    def search(self, keyword="", status="전체"):
+        """이름 또는 식별번호에 keyword가 들어 있고, 비만도가 status인 레코드를 찾는다."""
+        keyword = keyword.strip()
+        result = []
+        for r in self.records:
+            if keyword != "" and keyword not in r.name and keyword not in r.id:
+                continue
+            if status != "전체" and r.status != status:
+                continue
+            result.append(r)
+        return result
 
-    # ---------- Update ----------
-    def update_record(self, rid, height=None, weight=None):
-        """키/몸무게 수정 + BMI·비만도 자동 재계산."""
-        rec = self.get_by_id(rid)
-        if rec is None:
-            raise ValueError(f"식별번호 {rid}를 찾을 수 없습니다.")
+    # ---------- 수정 (Update) ----------
+    def update_record(self, record_id, name, birth_year, gender, height, weight):
+        """레코드를 수정하고 BMI를 다시 계산한다. (성공 여부, 메시지)"""
+        record = self.get_record(record_id)
+        if record is None:
+            return False, "수정할 사람을 표에서 먼저 선택하세요."
         try:
-            h = rec.height if height is None else float(height)
-            w = rec.weight if weight is None else float(weight)
-        except (TypeError, ValueError):
-            raise ValueError("키와 몸무게는 숫자로 입력하세요.")
-        if h <= 0 or w <= 0:
-            raise ValueError("키와 몸무게는 0보다 커야 합니다.")
-        rec.height, rec.weight = h, w
-        rec.recalculate()
-        self.save_all()
-        return rec
+            name, birth_year, gender, height, weight = self.check_input(
+                name, birth_year, gender, height, weight)
+        except ValueError as e:
+            return False, str(e)
 
-    # ---------- Delete ----------
-    def delete_record(self, rid):
-        rec = self.get_by_id(rid)
-        if rec is None:
-            return False
-        self.records.remove(rec)
-        self.save_all()
-        return True
+        if self.is_duplicate(name, birth_year, gender, skip_id=record_id):
+            return False, "같은 정보를 가진 다른 사람이 이미 있습니다."
+
+        record.name = name
+        record.birth_year = birth_year
+        record.gender = gender
+        record.height = height
+        record.weight = weight
+        record.update_bmi()          # BMI·비만도 자동 재계산
+        self.save(self.fmt)
+        return True, f"수정되었습니다. (BMI {record.bmi}, {record.status})"
+
+    # ---------- 삭제 (Delete) ----------
+    def delete_record(self, record_id):
+        """레코드를 삭제한다. (성공 여부, 메시지)"""
+        record = self.get_record(record_id)
+        if record is None:
+            return False, "삭제할 사람을 표에서 먼저 선택하세요."
+        self.records.remove(record)
+        self.save(self.fmt)
+        return True, "삭제되었습니다."
 
     # ---------- 통계 ----------
-    def statistics(self):
-        n = len(self.records)
-        if n == 0:
-            return {"count": 0, "avg_height": 0, "avg_weight": 0, "avg_bmi": 0, "status_count": {}}
-        counts = {}
+    def get_statistics(self):
+        """인원수, 평균 키/몸무게/BMI, 비만도별 인원수를 딕셔너리로 돌려준다."""
+        count = len(self.records)
+        counts = {"저체중": 0, "정상": 0, "과체중": 0, "비만": 0}
+        if count == 0:
+            return {"count": 0, "avg_height": 0, "avg_weight": 0, "avg_bmi": 0,
+                    "status_counts": counts}
+
+        total_h = total_w = total_b = 0
         for r in self.records:
-            counts[r.status] = counts.get(r.status, 0) + 1
+            total_h += r.height
+            total_w += r.weight
+            total_b += r.bmi
+            counts[r.status] += 1
         return {
-            "count": n,
-            "avg_height": round(sum(r.height for r in self.records) / n, 2),
-            "avg_weight": round(sum(r.weight for r in self.records) / n, 2),
-            "avg_bmi": round(sum(r.bmi for r in self.records) / n, 2),
-            "status_count": counts,
+            "count": count,
+            "avg_height": round(total_h / count, 2),
+            "avg_weight": round(total_w / count, 2),
+            "avg_bmi": round(total_b / count, 2),
+            "status_counts": counts,
         }
+
+
+# ---------- 콘솔 테스트 (12주차용) ----------
+# 프로젝트 루트 폴더에서  python -m modules.health_logic  로 실행
+if __name__ == "__main__":
+    logic = HealthLogic()
+    while True:
+        print("\n1.등록 2.전체목록 3.검색 4.수정 5.삭제 6.통계 0.종료")
+        menu = input("선택: ")
+        if menu == "1":
+            print(logic.add_record(input("이름: "), input("생년: "), input("성별(남/여): "),
+                                   input("키(cm): "), input("몸무게(kg): ")))
+        elif menu == "2":
+            for r in logic.get_all():
+                print(r.to_dict())
+        elif menu == "3":
+            for r in logic.search(input("이름/식별번호: ")):
+                print(r.to_dict())
+        elif menu == "4":
+            print(logic.update_record(input("식별번호: "), input("이름: "), input("생년: "),
+                                      input("성별(남/여): "), input("키(cm): "), input("몸무게(kg): ")))
+        elif menu == "5":
+            print(logic.delete_record(input("식별번호: ")))
+        elif menu == "6":
+            print(logic.get_statistics())
+        elif menu == "0":
+            break

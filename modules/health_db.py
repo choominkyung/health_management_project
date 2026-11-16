@@ -1,178 +1,188 @@
-"""모듈 1: 데이터 구조화(HealthRecord) 및 파일 I/O (JSON, CSV, TXT, Pickle)"""
+# health_db.py : 모듈 1 - 데이터 구조(레코드)와 파일 입출력
+#
+# [AI 사용 기록]
+# AI 종류 : Claude (Anthropic)
+# 사용 목적 : 모듈 1(health_db.py) 코드 작성
+# 프롬프트 : (실제로 입력한 프롬프트를 여기에 적으세요)
+# 사용자/날짜 : (본인 이름) / 2026-11-16
 
-import csv
-import json
 import os
+import json
+import csv
 import pickle
-from dataclasses import dataclass, asdict
+from datetime import datetime
 
+# data 폴더 위치 (modules 폴더의 바로 위에 있는 data 폴더)
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
+
+# 파일에 저장할 항목 이름 (순서 중요)
 FIELDS = ["id", "name", "birth_year", "gender", "height", "weight", "bmi", "status"]
 
-
-def calc_bmi(height_cm, weight_kg):
-    """BMI = 체중 / (키(m))^2, 소수 둘째 자리 반올림."""
-    return round(weight_kg / ((height_cm / 100) ** 2), 2)
+# 파일 형식별 확장자
+EXTENSIONS = {"json": "json", "csv": "csv", "txt": "txt", "pickle": "pkl"}
 
 
-def judge_status(bmi):
-    """BMI 수치로 비만도 판정 (저체중/정상/과체중/비만)."""
+def calc_bmi(height, weight):
+    """BMI를 계산해서 소수 둘째 자리까지 반올림해 돌려준다.
+
+    height: 키(cm), weight: 몸무게(kg)
+    공식: 몸무게 / (키(m) * 키(m))
+    """
+    return round(weight / ((height / 100) ** 2), 2)
+
+
+def get_status(bmi):
+    """BMI 수치로 비만도 판정 결과(문자열)를 돌려준다."""
     if bmi < 18.5:
         return "저체중"
-    if bmi < 23:
+    elif bmi < 23:
         return "정상"
-    if bmi < 25:
+    elif bmi < 25:
         return "과체중"
-    return "비만"
+    else:
+        return "비만"
 
 
-@dataclass
 class HealthRecord:
-    """한 사람의 건강정보 레코드."""
-    id: str
-    name: str
-    birth_year: int
-    gender: str
-    height: float
-    weight: float
-    bmi: float = 0.0
-    status: str = ""
+    """사람 한 명의 건강정보를 담는 클래스."""
 
-    def __post_init__(self):
-        self.recalculate()
+    def __init__(self, id, name, birth_year, gender, height, weight):
+        self.id = id
+        self.name = name
+        self.birth_year = int(birth_year)
+        self.gender = gender
+        self.height = float(height)
+        self.weight = float(weight)
+        self.bmi = 0.0
+        self.status = ""
+        self.update_bmi()
 
-    def recalculate(self):
-        """키/몸무게 기준으로 BMI와 비만도 재계산."""
+    def update_bmi(self):
+        """키/몸무게로 BMI와 비만도를 다시 계산한다."""
         self.bmi = calc_bmi(self.height, self.weight)
-        self.status = judge_status(self.bmi)
+        self.status = get_status(self.bmi)
 
     def to_dict(self):
-        return asdict(self)
+        """레코드를 딕셔너리로 바꾼다 (JSON, CSV 저장에 사용)."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "birth_year": self.birth_year,
+            "gender": self.gender,
+            "height": self.height,
+            "weight": self.weight,
+            "bmi": self.bmi,
+            "status": self.status,
+        }
 
-    @classmethod
-    def from_dict(cls, d):
-        return cls(id=str(d["id"]), name=str(d["name"]), birth_year=int(d["birth_year"]),
-                   gender=str(d["gender"]), height=float(d["height"]), weight=float(d["weight"]))
+    @staticmethod
+    def from_dict(d):
+        """딕셔너리를 HealthRecord 객체로 바꾼다. (BMI는 다시 계산)"""
+        return HealthRecord(
+            d["id"], d["name"], d["birth_year"], d["gender"], d["height"], d["weight"]
+        )
 
-    def __str__(self):
-        return (f"{self.id} | {self.name} | {self.birth_year} | {self.gender} | "
-                f"{self.height}cm | {self.weight}kg | BMI {self.bmi} | {self.status}")
+    def __repr__(self):
+        return (f'HealthRecord(id="{self.id}", name="{self.name}", '
+                f'height={self.height}, weight={self.weight})')
+
+
+def read_csv_rows(path):
+    """CSV 파일을 읽어 딕셔너리 리스트로 돌려준다. 실패하면 빈 리스트."""
+    try:
+        with open(path, "r", encoding="utf-8-sig", newline="") as f:
+            return list(csv.DictReader(f))
+    except Exception as e:
+        print("CSV 읽기 오류:", e)
+        return []
 
 
 class HealthManager:
-    """건강정보 객체 목록 관리 + 4가지 파일 저장/로드."""
+    """레코드 목록을 들고 있으면서 파일로 저장/불러오기를 하는 클래스."""
 
     def __init__(self):
-        self.records = []
+        self.records = []  # HealthRecord 객체들의 리스트
 
-    def add_record(self, record):
-        self.records.append(record)
-
-    def generate_id(self, year=2026):
-        """P2026-0001 형식의 고유 식별번호 발급."""
-        prefix = f"P{year}-"
-        nums = [int(r.id.split("-")[1]) for r in self.records if r.id.startswith(prefix)]
-        return f"{prefix}{(max(nums) + 1 if nums else 1):04d}"
-
-    def print_all(self, title="목록"):
-        print(f"\n===== {title} ({len(self.records)}건) =====")
+    # ---------- 식별번호 ----------
+    def make_id(self):
+        """고유한 식별번호를 만든다. 예) P2026-0001"""
+        max_no = 0
         for r in self.records:
-            print(r)
+            try:
+                no = int(r.id.split("-")[1])
+                if no > max_no:
+                    max_no = no
+            except (IndexError, ValueError):
+                pass
+        return f"P{datetime.now().year}-{max_no + 1:04d}"
 
-    # ---------- JSON ----------
-    def save_json(self, path):
-        try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump([r.to_dict() for r in self.records], f, ensure_ascii=False, indent=2)
-            return True
-        except (OSError, TypeError) as e:
-            print(f"[JSON 저장 오류] {e}")
-            return False
-   # [AI 사용 기록]
-    # - AI 종류: Claude 
-    # - 사용 목적: 모듈1 JSON 파일 저장(save_json) / 불러오기(load_json) 메소드 작성
-    # - 사용한 사람: 추민경
-    # - 날짜: 2026-11-20
-    #
-    # [코드 설명]
-    # save_json: 레코드 객체 목록을 JSON 파일로 저장한다.
-    #  - open(path, "w", encoding="utf-8"): 쓰기 모드로 파일을 연다. utf-8이라 한글이 깨지지 않는다.
-    #  - with문: 블록이 끝나면 파일을 자동으로 닫아 준다.
-    #  - [r.to_dict() for r in self.records]: 객체(HealthRecord)는 JSON으로 바로 못 바꾸므로
-    #    각 객체를 딕셔너리로 바꾼 리스트를 만든다.
-    #  - json.dump(..., ensure_ascii=False, indent=2): 리스트를 파일에 쓴다.
-    #    ensure_ascii=False는 한글을 그대로 저장하고, indent=2는 보기 좋게 들여쓴다.
-    #  - try-except: 파일 권한 문제나 디스크 오류(OSError), 변환 불가 값(TypeError)이 생겨도
-    #    프로그램이 죽지 않고 오류를 출력한 뒤 False를 반환한다. 성공하면 True를 반환한다.
-    def load_json(self, path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return [HealthRecord.from_dict(d) for d in json.load(f)]
-        except (OSError, ValueError, KeyError, TypeError) as e:
-            print(f"[JSON 로드 오류] {e}")
-            return []
+    # ---------- 파일 경로 ----------
+    def get_path(self, fmt):
+        return os.path.join(DATA_DIR, "health_data." + EXTENSIONS[fmt])
 
-    # ---------- CSV ----------
-    def save_csv(self, path):
+    # ---------- 저장 ----------
+    def save(self, fmt="json"):
+        """현재 레코드들을 fmt 형식(json/csv/txt/pickle)으로 저장. 성공하면 True."""
         try:
-            with open(path, "w", encoding="utf-8", newline="") as f:
-                w = csv.DictWriter(f, fieldnames=FIELDS)
-                w.writeheader()
-                for r in self.records:
-                    w.writerow(r.to_dict())
+            os.makedirs(DATA_DIR, exist_ok=True)
+            path = self.get_path(fmt)
+            if fmt == "json":
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump([r.to_dict() for r in self.records], f,
+                              ensure_ascii=False, indent=4)
+            elif fmt == "csv":
+                with open(path, "w", encoding="utf-8", newline="") as f:
+                    writer = csv.DictWriter(f, fieldnames=FIELDS)
+                    writer.writeheader()
+                    for r in self.records:
+                        writer.writerow(r.to_dict())
+            elif fmt == "txt":
+                with open(path, "w", encoding="utf-8") as f:
+                    for r in self.records:
+                        d = r.to_dict()
+                        f.write(",".join(str(d[k]) for k in FIELDS) + "\n")
+            elif fmt == "pickle":
+                with open(path, "wb") as f:
+                    pickle.dump(self.records, f)
+            else:
+                return False
             return True
-        except OSError as e:
-            print(f"[CSV 저장 오류] {e}")
+        except Exception as e:
+            print("저장 오류:", e)
             return False
 
-    def load_csv(self, path):
-        try:
-            with open(path, "r", encoding="utf-8-sig", newline="") as f:
-                return [HealthRecord.from_dict(row) for row in csv.DictReader(f)]
-        except (OSError, ValueError, KeyError) as e:
-            print(f"[CSV 로드 오류] {e}")
-            return []
+    # ---------- 불러오기 ----------
+    def load(self, fmt="json"):
+        """fmt 형식 파일에서 레코드를 불러온다. 성공하면 True.
 
-    # ---------- TXT ----------
-    def save_txt(self, path):
+        파일이 없거나 깨졌으면 False (기존 데이터는 그대로 둔다).
+        """
         try:
-            with open(path, "w", encoding="utf-8") as f:
-                for r in self.records:
-                    d = r.to_dict()
-                    f.write(",".join(str(d[k]) for k in FIELDS) + "\n")
+            path = self.get_path(fmt)
+            new_records = []
+            if fmt == "json":
+                with open(path, "r", encoding="utf-8") as f:
+                    for d in json.load(f):
+                        new_records.append(HealthRecord.from_dict(d))
+            elif fmt == "csv":
+                for d in read_csv_rows(path):
+                    new_records.append(HealthRecord.from_dict(d))
+            elif fmt == "txt":
+                with open(path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line == "":
+                            continue
+                        parts = line.split(",")
+                        d = dict(zip(FIELDS, parts))
+                        new_records.append(HealthRecord.from_dict(d))
+            elif fmt == "pickle":
+                with open(path, "rb") as f:
+                    new_records = pickle.load(f)
+            else:
+                return False
+            self.records = new_records
             return True
-        except OSError as e:
-            print(f"[TXT 저장 오류] {e}")
+        except Exception as e:
+            print("불러오기 오류:", e)
             return False
-
-    def load_txt(self, path):
-        result = []
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    parts = line.split(",")
-                    result.append(HealthRecord.from_dict(dict(zip(FIELDS, parts))))
-            return result
-        except (OSError, ValueError, KeyError) as e:
-            print(f"[TXT 로드 오류] {e}")
-            return []
-
-    # ---------- Pickle ----------
-    def save_pickle(self, path):
-        try:
-            with open(path, "wb") as f:
-                pickle.dump(self.records, f)
-            return True
-        except (OSError, pickle.PicklingError) as e:
-            print(f"[Pickle 저장 오류] {e}")
-            return False
-
-    def load_pickle(self, path):
-        try:
-            with open(path, "rb") as f:
-                return pickle.load(f)
-        except (OSError, pickle.UnpicklingError, EOFError, AttributeError) as e:
-            print(f"[Pickle 로드 오류] {e}")
-            return []

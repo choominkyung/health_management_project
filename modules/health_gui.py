@@ -1,207 +1,237 @@
-"""모듈 3: Tkinter 기반 GUI 및 이벤트 바인딩 (로직은 모듈 2 HealthService 호출)"""
+# health_gui.py : 모듈 3 - tkinter 화면(GUI)과 이벤트 처리
+#
+# [AI 사용 기록]
+# AI 종류 : Claude (Anthropic)
+# 사용 목적 : 모듈 3(health_gui.py) 코드 작성
+# 프롬프트 : (실제로 입력한 프롬프트를 여기에 적으세요)
+# 사용자/날짜 : (본인 이름) / 2026-11-16
 
-import os
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
-
-from modules.health_logic import HealthService
-
-COLUMNS = [("id", "식별번호", 100), ("name", "이름", 80), ("birth_year", "생년", 60),
-           ("gender", "성별", 50), ("height", "키(cm)", 70), ("weight", "몸무게(kg)", 80),
-           ("bmi", "BMI", 60), ("status", "비만도", 70)]
-FORMATS = {"JSON": "json", "CSV": "csv", "TXT": "txt", "PICKLE": "pkl"}
+from modules.health_logic import HealthLogic
 
 
-class HealthApp(tk.Tk):
-    """건강관리 프로그램 메인 윈도우."""
+class HealthApp:
+    """건강관리 프로그램의 화면 클래스."""
 
-    def __init__(self, data_dir="data"):
-        super().__init__()
-        self.title("BMI 건강관리 프로그램")
-        self.geometry("920x600")
-        self.svc = HealthService(data_dir)
-        self.data_dir = data_dir
-        self.vars = {k: tk.StringVar() for k in ("id", "name", "birth_year", "gender", "height", "weight")}
-        self.search_name = tk.StringVar()
-        self.search_status = tk.StringVar(value="전체")
-        self.file_fmt = tk.StringVar(value="JSON")
-        self._build_form()
-        self._build_search()
-        self._build_table()
-        self._build_statusbar()
-        self.refresh()
+    def __init__(self):
+        self.logic = HealthLogic()
+        self.root = tk.Tk()
+        self.root.title("BMI 건강관리 프로그램")
+        self.root.geometry("900x650")
 
-    # ---------- 화면 구성 ----------
-    def _build_form(self):
-        frm = ttk.LabelFrame(self, text="건강정보 입력")
-        frm.pack(fill="x", padx=10, pady=(10, 5))
-        labels = [("식별번호(자동)", "id"), ("이름", "name"), ("생년", "birth_year"),
-                  ("성별", "gender"), ("키(cm)", "height"), ("몸무게(kg)", "weight")]
-        for i, (text, key) in enumerate(labels):
-            ttk.Label(frm, text=text).grid(row=0, column=i, padx=5, pady=(5, 0))
-            if key == "gender":
-                w = ttk.Combobox(frm, textvariable=self.vars[key], values=["남", "여"], width=8, state="readonly")
-            else:
-                w = ttk.Entry(frm, textvariable=self.vars[key], width=12,
-                              state="readonly" if key == "id" else "normal")
-            w.grid(row=1, column=i, padx=5, pady=5)
+        self.make_form()
+        self.make_buttons()
+        self.make_search()
+        self.make_table()
+        self.make_stats()
+        self.refresh_table()
 
-        btns = ttk.Frame(frm)
-        btns.grid(row=2, column=0, columnspan=6, pady=5)
-        for text, cmd in [("등록", self.on_add), ("수정", self.on_update), ("삭제", self.on_delete),
-                          ("입력 초기화", self.clear_form), ("CSV 일괄등록", self.on_import)]:
-            ttk.Button(btns, text=text, command=cmd).pack(side="left", padx=4)
+    # ---------- 화면 만들기 ----------
+    def make_form(self):
+        """입력 폼 (식별번호, 이름, 생년, 성별, 키, 몸무게)"""
+        frame = tk.LabelFrame(self.root, text="건강정보 입력", padx=10, pady=10)
+        frame.pack(fill="x", padx=10, pady=5)
 
-    def _build_search(self):
-        frm = ttk.LabelFrame(self, text="검색 / 파일")
-        frm.pack(fill="x", padx=10, pady=5)
-        ttk.Label(frm, text="이름").pack(side="left", padx=5)
-        ttk.Entry(frm, textvariable=self.search_name, width=12).pack(side="left")
-        ttk.Label(frm, text="비만도").pack(side="left", padx=5)
-        ttk.Combobox(frm, textvariable=self.search_status, width=8, state="readonly",
-                     values=["전체", "저체중", "정상", "과체중", "비만"]).pack(side="left")
-        ttk.Button(frm, text="검색", command=self.on_search).pack(side="left", padx=4)
-        ttk.Button(frm, text="전체보기", command=self.on_show_all).pack(side="left", padx=4)
-        ttk.Button(frm, text="통계", command=self.on_stats).pack(side="left", padx=4)
+        self.id_var = tk.StringVar()
+        self.name_var = tk.StringVar()
+        self.birth_var = tk.StringVar()
+        self.gender_var = tk.StringVar()
+        self.height_var = tk.StringVar()
+        self.weight_var = tk.StringVar()
 
-        ttk.Combobox(frm, textvariable=self.file_fmt, width=8, state="readonly",
-                     values=list(FORMATS)).pack(side="right", padx=5)
-        ttk.Button(frm, text="불러오기", command=self.on_load).pack(side="right", padx=2)
-        ttk.Button(frm, text="저장", command=self.on_save).pack(side="right", padx=2)
-        ttk.Label(frm, text="파일형식").pack(side="right", padx=5)
+        tk.Label(frame, text="식별번호").grid(row=0, column=0, padx=5, pady=3)
+        tk.Entry(frame, textvariable=self.id_var, state="readonly", width=14).grid(row=0, column=1)
+        tk.Label(frame, text="이름").grid(row=0, column=2, padx=5)
+        tk.Entry(frame, textvariable=self.name_var, width=14).grid(row=0, column=3)
+        tk.Label(frame, text="생년").grid(row=0, column=4, padx=5)
+        tk.Entry(frame, textvariable=self.birth_var, width=10).grid(row=0, column=5)
 
-    def _build_table(self):
-        frm = ttk.Frame(self)
-        frm.pack(fill="both", expand=True, padx=10, pady=5)
-        self.tree = ttk.Treeview(frm, columns=[c[0] for c in COLUMNS], show="headings")
-        for key, text, width in COLUMNS:
-            self.tree.heading(key, text=text)
-            self.tree.column(key, width=width, anchor="center")
-        sb = ttk.Scrollbar(frm, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=sb.set)
+        tk.Label(frame, text="성별").grid(row=1, column=0, padx=5, pady=3)
+        ttk.Combobox(frame, textvariable=self.gender_var, values=["남", "여"],
+                     state="readonly", width=11).grid(row=1, column=1)
+        tk.Label(frame, text="키(cm)").grid(row=1, column=2, padx=5)
+        tk.Entry(frame, textvariable=self.height_var, width=14).grid(row=1, column=3)
+        tk.Label(frame, text="몸무게(kg)").grid(row=1, column=4, padx=5)
+        tk.Entry(frame, textvariable=self.weight_var, width=10).grid(row=1, column=5)
+
+    def make_buttons(self):
+        """등록/수정/삭제/비우기/CSV 등록/파일 저장·불러오기 버튼"""
+        frame = tk.Frame(self.root)
+        frame.pack(fill="x", padx=10, pady=5)
+
+        tk.Button(frame, text="등록", width=8, command=self.on_add).pack(side="left", padx=2)
+        tk.Button(frame, text="수정", width=8, command=self.on_update).pack(side="left", padx=2)
+        tk.Button(frame, text="삭제", width=8, command=self.on_delete).pack(side="left", padx=2)
+        tk.Button(frame, text="입력창 비우기", command=self.clear_form).pack(side="left", padx=2)
+        tk.Button(frame, text="CSV 일괄 등록", command=self.on_import_csv).pack(side="left", padx=10)
+
+        # 오른쪽: 파일 형식 선택 + 저장/불러오기
+        self.fmt_var = tk.StringVar(value="json")
+        tk.Button(frame, text="불러오기", command=self.on_load).pack(side="right", padx=2)
+        tk.Button(frame, text="저장", command=self.on_save).pack(side="right", padx=2)
+        ttk.Combobox(frame, textvariable=self.fmt_var, values=["json", "csv", "txt", "pickle"],
+                     state="readonly", width=8).pack(side="right", padx=2)
+        tk.Label(frame, text="파일 형식").pack(side="right")
+
+    def make_search(self):
+        """검색 (이름/식별번호 + 비만도)"""
+        frame = tk.LabelFrame(self.root, text="검색", padx=10, pady=5)
+        frame.pack(fill="x", padx=10, pady=5)
+
+        self.keyword_var = tk.StringVar()
+        self.search_status_var = tk.StringVar(value="전체")
+
+        tk.Label(frame, text="이름/식별번호").pack(side="left")
+        tk.Entry(frame, textvariable=self.keyword_var, width=15).pack(side="left", padx=5)
+        tk.Label(frame, text="비만도").pack(side="left")
+        ttk.Combobox(frame, textvariable=self.search_status_var,
+                     values=["전체", "저체중", "정상", "과체중", "비만"],
+                     state="readonly", width=8).pack(side="left", padx=5)
+        tk.Button(frame, text="검색", command=self.on_search).pack(side="left", padx=2)
+        tk.Button(frame, text="전체 보기", command=self.on_show_all).pack(side="left", padx=2)
+
+    def make_table(self):
+        """표(Treeview) + 스크롤바"""
+        frame = tk.Frame(self.root)
+        frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+        columns = ("id", "name", "birth_year", "gender", "height", "weight", "bmi", "status")
+        headings = ("식별번호", "이름", "생년", "성별", "키(cm)", "몸무게(kg)", "BMI", "비만도")
+
+        self.tree = ttk.Treeview(frame, columns=columns, show="headings")
+        for col, head in zip(columns, headings):
+            self.tree.heading(col, text=head)
+            self.tree.column(col, width=100, anchor="center")
+
+        scroll = ttk.Scrollbar(frame, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scroll.set)
         self.tree.pack(side="left", fill="both", expand=True)
-        sb.pack(side="right", fill="y")
+        scroll.pack(side="right", fill="y")
+
+        # 행을 클릭하면 on_select 실행
         self.tree.bind("<<TreeviewSelect>>", self.on_select)
 
-    def _build_statusbar(self):
-        self.status_label = ttk.Label(self, anchor="w", relief="sunken")
-        self.status_label.pack(fill="x", side="bottom")
+    def make_stats(self):
+        """아래쪽 통계 표시 글자"""
+        self.stats_label = tk.Label(self.root, text="", justify="left", anchor="w",
+                                    relief="groove", padx=10, pady=5)
+        self.stats_label.pack(fill="x", padx=10, pady=5)
 
-    # ---------- 공통 ----------
-    def refresh(self, records=None):
-        """표 갱신 (records가 없으면 전체)."""
-        self.tree.delete(*self.tree.get_children())
-        for r in (self.svc.get_all() if records is None else records):
-            self.tree.insert("", "end", iid=r.id, values=(r.id, r.name, r.birth_year, r.gender,
-                                                         r.height, r.weight, r.bmi, r.status))
-        s = self.svc.statistics()
-        self.status_label.config(text=f" 총 {s['count']}명 | 평균 키 {s['avg_height']}cm | "
-                                      f"평균 몸무게 {s['avg_weight']}kg | 평균 BMI {s['avg_bmi']}")
+    # ---------- 화면 갱신 ----------
+    def show_records(self, records):
+        """표를 지우고 records를 다시 채운다."""
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        for r in records:
+            self.tree.insert("", "end", values=(r.id, r.name, r.birth_year, r.gender,
+                                                r.height, r.weight, r.bmi, r.status))
+
+    def refresh_table(self):
+        """전체 목록을 표에 보여주고 통계도 갱신한다."""
+        self.show_records(self.logic.get_all())
+        s = self.logic.get_statistics()
+        c = s["status_counts"]
+        self.stats_label.config(text=(
+            f"[통계] 총 {s['count']}명 | 평균 키 {s['avg_height']}cm | "
+            f"평균 몸무게 {s['avg_weight']}kg | 평균 BMI {s['avg_bmi']}\n"
+            f"저체중 {c['저체중']}명 | 정상 {c['정상']}명 | 과체중 {c['과체중']}명 | 비만 {c['비만']}명"))
 
     def clear_form(self):
-        for v in self.vars.values():
-            v.set("")
-        self.tree.selection_remove(self.tree.selection())
+        self.id_var.set("")
+        self.name_var.set("")
+        self.birth_var.set("")
+        self.gender_var.set("")
+        self.height_var.set("")
+        self.weight_var.set("")
 
-    def _form(self, key):
-        return self.vars[key].get().strip()
-
-    # ---------- 이벤트 ----------
-    def on_select(self, _event=None):
-        """표의 행 클릭 시 입력 폼 자동 채움."""
-        sel = self.tree.selection()
-        if not sel:
+    # ---------- 이벤트 처리 ----------
+    def on_select(self, event):
+        """표의 행을 클릭하면 입력창에 값을 채운다."""
+        selected = self.tree.selection()
+        if len(selected) == 0:
             return
-        r = self.svc.get_by_id(sel[0])
-        if r:
-            for k in self.vars:
-                self.vars[k].set(str(getattr(r, k)))
+        values = self.tree.item(selected[0], "values")
+        self.id_var.set(values[0])
+        self.name_var.set(values[1])
+        self.birth_var.set(values[2])
+        self.gender_var.set(values[3])
+        self.height_var.set(values[4])
+        self.weight_var.set(values[5])
 
     def on_add(self):
-        try:
-            r = self.svc.add_person(self._form("name"), self._form("birth_year"), self._form("gender"),
-                                    self._form("height"), self._form("weight"))
-        except ValueError as e:
-            messagebox.showwarning("입력 오류", str(e))
-            return
-        messagebox.showinfo("등록 완료", f"{r.name}님이 {r.id}로 등록되었습니다.")
-        self.clear_form()
-        self.refresh()
+        ok, msg = self.logic.add_record(self.name_var.get(), self.birth_var.get(),
+                                        self.gender_var.get(), self.height_var.get(),
+                                        self.weight_var.get())
+        if ok:
+            messagebox.showinfo("등록 완료", msg)
+            self.clear_form()
+            self.refresh_table()
+        else:
+            messagebox.showwarning("입력 오류", msg)
 
     def on_update(self):
-        rid = self._form("id")
-        if not rid:
-            messagebox.showwarning("선택 필요", "수정할 행을 먼저 선택하세요.")
-            return
-        try:
-            r = self.svc.update_record(rid, self._form("height"), self._form("weight"))
-        except ValueError as e:
-            messagebox.showwarning("입력 오류", str(e))
-            return
-        messagebox.showinfo("수정 완료", f"BMI {r.bmi} ({r.status})로 갱신되었습니다.")
-        self.refresh()
-        self.tree.selection_set(rid)
+        ok, msg = self.logic.update_record(self.id_var.get(), self.name_var.get(),
+                                           self.birth_var.get(), self.gender_var.get(),
+                                           self.height_var.get(), self.weight_var.get())
+        if ok:
+            messagebox.showinfo("수정 완료", msg)
+            self.clear_form()
+            self.refresh_table()
+        else:
+            messagebox.showwarning("수정 오류", msg)
 
     def on_delete(self):
-        rid = self._form("id")
-        if not rid:
-            messagebox.showwarning("선택 필요", "삭제할 행을 먼저 선택하세요.")
+        if self.id_var.get() == "":
+            messagebox.showwarning("삭제 오류", "삭제할 사람을 표에서 먼저 선택하세요.")
             return
-        if not messagebox.askyesno("삭제 확인", f"{rid}을(를) 삭제할까요?"):
+        if not messagebox.askyesno("삭제 확인", "정말 삭제할까요?"):
             return
-        if self.svc.delete_record(rid):
-            messagebox.showinfo("삭제 완료", "삭제되었습니다.")
+        ok, msg = self.logic.delete_record(self.id_var.get())
+        if ok:
+            messagebox.showinfo("삭제 완료", msg)
             self.clear_form()
-            self.refresh()
+            self.refresh_table()
         else:
-            messagebox.showerror("오류", "삭제할 수 없습니다.")
+            messagebox.showwarning("삭제 오류", msg)
+
+    def on_import_csv(self):
+        path = filedialog.askopenfilename(title="CSV 파일 선택",
+                                          filetypes=[("CSV 파일", "*.csv")])
+        if path == "":
+            return
+        ok, msg = self.logic.add_from_csv(path)
+        if ok:
+            messagebox.showinfo("일괄 등록 완료", msg)
+            self.refresh_table()
+        else:
+            messagebox.showwarning("일괄 등록 오류", msg)
 
     def on_search(self):
-        status = self.search_status.get()
-        result = self.svc.search(name=self.search_name.get().strip() or None,
-                                 status=None if status == "전체" else status)
-        self.refresh(result)
+        result = self.logic.search(self.keyword_var.get(), self.search_status_var.get())
+        self.show_records(result)
 
     def on_show_all(self):
-        self.search_name.set("")
-        self.search_status.set("전체")
-        self.refresh()
-
-    def on_import(self):
-        path = filedialog.askopenfilename(title="CSV 선택", filetypes=[("CSV", "*.csv"), ("모든 파일", "*.*")])
-        if not path:
-            return
-        added, skipped = self.svc.import_csv(path)
-        messagebox.showinfo("일괄등록 완료", f"추가 {added}건, 건너뜀(중복/오류) {skipped}건")
-        self.refresh()
-
-    def on_stats(self):
-        s = self.svc.statistics()
-        counts = "\n".join(f"  {k}: {v}명" for k, v in s["status_count"].items()) or "  (없음)"
-        messagebox.showinfo("통계", f"총 인원: {s['count']}명\n평균 키: {s['avg_height']}cm\n"
-                                    f"평균 몸무게: {s['avg_weight']}kg\n평균 BMI: {s['avg_bmi']}\n\n비만도별:\n{counts}")
-
-    def _path(self):
-        return os.path.join(self.data_dir, f"health_data.{FORMATS[self.file_fmt.get()]}")
+        self.keyword_var.set("")
+        self.search_status_var.set("전체")
+        self.refresh_table()
 
     def on_save(self):
-        saver = {"json": self.svc.save_json, "csv": self.svc.save_csv,
-                 "txt": self.svc.save_txt, "pkl": self.svc.save_pickle}[FORMATS[self.file_fmt.get()]]
-        if saver(self._path()):
-            messagebox.showinfo("저장 완료", f"{self._path()} 에 저장했습니다.")
+        fmt = self.fmt_var.get()
+        if self.logic.save(fmt):
+            self.logic.fmt = fmt
+            messagebox.showinfo("저장 완료", f"{fmt} 형식으로 저장했습니다.")
         else:
-            messagebox.showerror("저장 실패", "파일을 저장하지 못했습니다.")
+            messagebox.showerror("저장 오류", "파일 저장에 실패했습니다.")
 
     def on_load(self):
-        if not os.path.exists(self._path()):
-            messagebox.showwarning("파일 없음", f"{self._path()} 파일이 없습니다.")
-            return
-        loader = {"json": self.svc.load_json, "csv": self.svc.load_csv,
-                  "txt": self.svc.load_txt, "pkl": self.svc.load_pickle}[FORMATS[self.file_fmt.get()]]
-        self.svc.records = loader(self._path())
-        self.refresh()
-        messagebox.showinfo("불러오기 완료", f"{len(self.svc.records)}건을 불러왔습니다.")
+        fmt = self.fmt_var.get()
+        if self.logic.load(fmt):
+            self.logic.fmt = fmt
+            self.refresh_table()
+            messagebox.showinfo("불러오기 완료", f"{fmt} 파일을 불러왔습니다.")
+        else:
+            messagebox.showerror("불러오기 오류", "파일이 없거나 읽을 수 없습니다.")
 
-
-def run():
-    HealthApp().mainloop()
+    def run(self):
+        self.root.mainloop()
