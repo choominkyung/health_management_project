@@ -1,10 +1,5 @@
 # health_gui.py : 모듈 3 - tkinter 화면(GUI)과 이벤트 처리
-#
-# [AI 사용 기록]
-# AI 종류 : Claude (Anthropic)
-# 사용 목적 : 모듈 3(health_gui.py) 코드 작성
-# 프롬프트 : (실제로 입력한 프롬프트를 여기에 적으세요)
-# 사용자/날짜 : (본인 이름) / 2026-11-16
+
 
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog

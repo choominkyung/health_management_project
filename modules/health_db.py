@@ -1,10 +1,4 @@
 # health_db.py : 모듈 1 - 데이터 구조(레코드)와 파일 입출력
-#
-# [AI 사용 기록]
-# AI 종류 : Claude (Anthropic)
-# 사용 목적 : 모듈 1(health_db.py) 코드 작성
-# 프롬프트 : (실제로 입력한 프롬프트를 여기에 적으세요)
-# 사용자/날짜 : (본인 이름) / 2026-11-16
 
 import os
 import json

@@ -1,10 +1,6 @@
 # health_logic.py : 모듈 2 - 핵심 로직 (CRUD, 검색, 통계)
 #
-# [AI 사용 기록]
-# AI 종류 : Claude (Anthropic)
-# 사용 목적 : 모듈 2(health_logic.py) 코드 작성
-# 프롬프트 : (실제로 입력한 프롬프트를 여기에 적으세요)
-# 사용자/날짜 : (본인 이름) / 2026-11-16
+
 
 from datetime import datetime
 from modules.health_db import HealthManager, HealthRecord, read_csv_rows
