@@ -68,7 +68,10 @@ class HealthRecord:
             "bmi": self.bmi,
             "status": self.status,
         }
-
+#사용한 AI : chapgpt
+# 사용한 목적 : 정적 메서드로 만들기 위해서
+#사용한 사람 : 추민경
+# 사용한 날짜 : 2026-11-17
     @staticmethod
     def from_dict(d):
         """딕셔너리를 HealthRecord 객체로 바꾼다. (BMI는 다시 계산)"""
